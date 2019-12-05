@@ -1,3 +1,3 @@
-module com.armineasy.activitymaster.conversations {
+module com.guicedee.activitymaster.conversations {
 
 }
