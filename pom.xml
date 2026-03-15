@@ -12,6 +12,11 @@
     <artifactId>conversation-master</artifactId>
     <packaging>jar</packaging>
     <name>Conversation Master</name>
+
+
+    <properties>
+        <project.scm.nameUrl>/Activity-Master/ConversationMaster</project.scm.nameUrl>
+    </properties>
 	
     <dependencies>
      
