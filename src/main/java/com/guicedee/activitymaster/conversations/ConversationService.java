@@ -285,8 +285,7 @@ public final class ConversationService implements IConversationService {
                 .chain(resourceType -> classification(session, scope, "ConversationMessageType", "EventXEventType")
                 .chain(typeRole -> classification(session, scope, "ConversationMessage", "EventXArrangement")
                 .chain(arrangementRole -> classification(session, scope, "ConversationSender", "EventXInvolvedParty")
-                .chain(senderRole -> classification(session, scope, "ConversationBody", "ResourceItemXClassification")
-                .chain(bodyRole -> classification(session, scope, "ConversationBodyType", "ResourceItemXResourceItemType")
+                .chain(senderRole -> classification(session, scope, "ConversationBodyType", "ResourceItemXResourceItemType")
                 .chain(bodyTypeRole -> classification(session, scope, "ConversationMessageBody", "EventXResourceItem")
                 .chain(resourceRole -> {
                     UUID event = UUID.randomUUID(), resource = UUID.randomUUID();
@@ -302,21 +301,27 @@ public final class ConversationService implements IConversationService {
                                     Map.of("resourceitemdatatype", "Conversation Message Body")))
                             .chain(() -> insert(session, system, identity, "resource.resourceitemxresourceitemtype", "resourceitemxresourceitemtypeid", UUID.randomUUID(),
                                     Map.of("resourceitemid", resource, "resourceitemtypeid", resourceType, "classificationid", bodyTypeRole, "value", "1")))
-                            .chain(() -> insert(session, system, identity, "resource.resourceitemxclassification", "resourceitemxclassificationid", UUID.randomUUID(),
-                                    Map.of("resourceitemid", resource, "classificationid", bodyRole, "value", body)))
+                            // A relationship value is varchar(150); message text of any length is
+                            // resource item data. resourceitemdatavalue is keyed by the resource item
+                            // id and carries no security columns, so messages stay private rows.
+                            .chain(() -> session.createNativeQuery("insert into resource.resourceitemdatavalue"
+                                            + " (resourceitemdatavalueid, resourceitemdatavalue) values (:id, :data)")
+                                    .setParameter("id", resource)
+                                    .setParameter("data", body.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                                    .executeUpdate())
                             .chain(() -> insert(session, system, identity, "event.eventxresourceitem", "eventxresourceitemid", UUID.randomUUID(),
                                     Map.of("eventid", event, "resourceitemid", resource, "classificationid", resourceRole, "value", "1")))
                             .chain(() -> session.createNativeQuery("select warehousecreatedtimestamp from event.event where eventid=:id", OffsetDateTime.class)
                                     .setParameter("id", event).getSingleResult())
                             .map(created -> new Message(event, id, scope.actor(), body, created));
-                }))))))))));
+                })))))))));
     }
 
     @Override public Uni<Page<Message>> messages(Mutiny.StatelessSession session, ISystems<?, ?> system,
                                                    ConversationIdentity identity, UUID id, int offset, int limit) {
         page(offset, limit);
         return actor(session, system, identity).chain(scope -> member(session, scope, id, false)
-                .chain(() -> session.createNativeQuery("select e.eventid, s.involvedpartyid, b.value, e.warehousecreatedtimestamp "
+                .chain(() -> session.createNativeQuery("select e.eventid, s.involvedpartyid, convert_from(dv.resourceitemdatavalue,'UTF8'), e.warehousecreatedtimestamp "
                                 + "from event.event e join event.eventxarrangement ea on ea.eventid=e.eventid "
                                 + "join classification.classification ear on ear.classificationid=ea.classificationid "
                                 + "join event.eventxinvolvedparty s on s.eventid=e.eventid "
@@ -324,16 +329,15 @@ public final class ConversationService implements IConversationService {
                                 + "join event.eventxresourceitem er on er.eventid=e.eventid "
                                 + "join classification.classification err on err.classificationid=er.classificationid "
                                 + "join resource.resourceitem r on r.resourceitemid=er.resourceitemid "
-                                + "join resource.resourceitemxclassification b on b.resourceitemid=r.resourceitemid "
-                                + "join classification.classification br on br.classificationid=b.classificationid "
+                                + "join resource.resourceitemdatavalue dv on dv.resourceitemdatavalueid=r.resourceitemid "
                                 + "where ea.arrangementid=:id and e.systemid=:system and " + live("e") + " and " + live("ea")
-                                + " and " + live("s") + " and " + live("er") + " and " + live("r") + " and " + live("b")
+                                + " and " + live("s") + " and " + live("er") + " and " + live("r")
                                 + " and ea.systemid=:system and s.systemid=:system and er.systemid=:system"
-                                + " and r.systemid=:system and b.systemid=:system"
-                                + " and ear.systemid=:system and sr.systemid=:system and err.systemid=:system and br.systemid=:system"
-                                + " and " + live("ear") + " and " + live("sr") + " and " + live("err") + " and " + live("br")
+                                + " and r.systemid=:system"
+                                + " and ear.systemid=:system and sr.systemid=:system and err.systemid=:system"
+                                + " and " + live("ear") + " and " + live("sr") + " and " + live("err")
                                 + " and ear.classificationname='ConversationMessage' and sr.classificationname='ConversationSender'"
-                                + " and err.classificationname='ConversationMessageBody' and br.classificationname='ConversationBody'"
+                                + " and err.classificationname='ConversationMessageBody'"
                                 + " order by e.warehousecreatedtimestamp,e.eventid", Object[].class)
                         .setParameter("id", id).setParameter("system", scope.system())
                         .setParameter("enterprise", scope.enterprise()).setFirstResult(offset).setMaxResults(limit + 1)

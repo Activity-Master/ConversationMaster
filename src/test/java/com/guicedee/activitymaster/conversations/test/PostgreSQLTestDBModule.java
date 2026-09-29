@@ -1,12 +1,16 @@
 package com.guicedee.activitymaster.conversations.test;
 
+import com.guicedee.activitymaster.fsdm.db.FsdmSchema;
+
 import com.guicedee.client.services.lifecycle.IGuiceModule;
 import com.guicedee.persistence.*;
 import com.guicedee.persistence.annotations.EntityManager;
 import com.guicedee.persistence.implementations.postgres.PostgresConnectionBaseInfo;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.utility.MountableFile;
+import org.testcontainers.images.builder.Transferable;
+
+import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 
 @EntityManager(value = "ActivityMaster-Test", defaultEm = true)
@@ -17,12 +21,15 @@ public class PostgreSQLTestDBModule extends DatabaseModule<PostgreSQLTestDBModul
     static {
         DATABASE.start();
         try {
-            for (String file : new String[]{"postgres_fsdm.sql", "postgres_structure.sql"}) {
-                String destination = "/docker-entrypoint-initdb.d/" + file;
-                DATABASE.copyFileToContainer(MountableFile.forClasspathResource(file), destination);
-                var result = DATABASE.execInContainer("psql", "-U", "postgres", "-d", "fsdm", "-f", destination);
-                if (result.getExitCode() != 0) throw new IllegalStateException(result.getStderr());
-            }
+            FsdmSchema.forEachScript((script, sql) -> {
+                DATABASE.copyFileToContainer(Transferable.of(sql.getBytes(StandardCharsets.UTF_8)),
+                        "/tmp/" + script);
+                var scriptResult = DATABASE.execInContainer("psql", "-v", "ON_ERROR_STOP=1",
+                        "-U", DATABASE.getUsername(), "-d", DATABASE.getDatabaseName(), "-f", "/tmp/" + script);
+                if (scriptResult.getExitCode() != 0) {
+                    throw new IllegalStateException("psql failed on " + script + ": " + scriptResult.getStderr());
+                }
+            });
         } catch (Exception e) {
             DATABASE.stop();
             throw new ExceptionInInitializerError(e);

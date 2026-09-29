@@ -16,12 +16,7 @@ import static com.guicedee.activitymaster.fsdm.client.services.IActivityMasterSe
 @SortedUpdate(sortOrder = 1175, taskCount = 1)
 public final class ConversationInstall implements ISystemUpdate {
     @Override public Uni<Boolean> update(Mutiny.StatelessSession session, IEnterprise<?, ?> enterprise) {
-        return session.createNativeQuery("select data_type from information_schema.columns where table_schema='resource' "
-                        + "and table_name='resourceitemxclassification' and column_name='value'", String.class)
-                .getSingleResult().invoke(type -> {
-                    if (!"text".equals(type)) throw new IllegalStateException("Conversation messages require text-valued ResourceItem classifications");
-                })
-                .chain(() -> getISystem(session, ConversationSystem.NAME, enterprise))
+        return getISystem(session, ConversationSystem.NAME, enterprise)
                 .chain(system -> getISystemToken(session, ConversationSystem.NAME, enterprise)
                         .chain(token -> install(session, system, token).replaceWith(true)));
     }
@@ -41,7 +36,6 @@ public final class ConversationInstall implements ISystemUpdate {
                 .chain(() -> role(session, classes, system, token, "ConversationMessage", EnterpriseClassificationDataConcepts.EventXArrangement))
                 .chain(() -> role(session, classes, system, token, "ConversationSender", EnterpriseClassificationDataConcepts.EventXInvolvedParty))
                 .chain(() -> role(session, classes, system, token, "ConversationBodyType", EnterpriseClassificationDataConcepts.ResourceItemXResourceItemType))
-                .chain(() -> role(session, classes, system, token, "ConversationBody", EnterpriseClassificationDataConcepts.ResourceItemXClassification))
                 .chain(() -> role(session, classes, system, token, "ConversationMessageBody", EnterpriseClassificationDataConcepts.EventXResourceItem))
                 .replaceWithVoid();
     }
