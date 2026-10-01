@@ -22,6 +22,10 @@
     <description>FSDM-backed conversations between involved parties</description>
     <dependencies>
         <dependency>
+            <groupId>com.guicedee</groupId>
+            <artifactId>graphql</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.activity-master</groupId>
             <artifactId>activity-master</artifactId>
         </dependency>

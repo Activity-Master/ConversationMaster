@@ -37,3 +37,40 @@ REST base: /{enterprise}/conversations
 Reads are paged with offset 0..10,000 and limit 1..100. The supplied owner must
 equal the trusted host context. Participant IDs in a request are invite targets,
 never proof of the caller's identity or authority.
+
+## GraphQL
+
+`ConversationGraphQLSchemaProvider` is registered through JPMS and
+`META-INF/services`. It contributes typed operations to the host's GuicedEE
+GraphQL endpoint, normally `/graphql`, using the same `ConversationApi` as REST.
+Bind `ConversationIdentityProvider` to the verified HTTP caller. The adapter
+subscribes within the server's call scope so the API captures that identity
+before starting its stateless FSDM transaction.
+
+Queries: `conversation`, `conversations`, `conversationMessages`.
+Mutations: `conversationCreate`, `conversationSend`, `conversationLeave`.
+All operations require `enterprise`; targets use `conversationId`. Pages default
+to offset 0 and limit 50, with the same 0..10,000 offset and 1..100 limit bounds.
+Successful leave returns `true` and ends only the caller's current membership.
+
+```graphql
+mutation SendMessage($input: ConversationSendInput!) {
+  conversationSend(enterprise: "Example", conversationId: "<uuid>", input: $input) {
+    id conversationId senderId text createdAt
+  }
+}
+```
+
+`ConversationCreateInput` contains `realm`, `ownerId` and optional `participants`
+(default `[]`). `ConversationSendInput` contains `text`. The realm/owner still
+must match the verified host context, and participant IDs remain invitation
+targets. GraphQL accepts no caller identity or security token argument.
+
+Typed pages expose `items`, `offset`, `limit` and `hasMore`. IDs are GraphQL `ID`
+values and timestamps are ISO offset-date-time strings. Current membership gates
+both reads and sends; unavailable conversations return `NOT_FOUND`. Other error
+codes are `FORBIDDEN`, `BAD_USER_INPUT` and `INTERNAL_SERVER_ERROR`, with sanitized
+messages in all cases.
+
+The combined HTTP/PostgreSQL GraphQL regression is in
+`../forums/src/test/java/com/guicedee/activitymaster/forums/test/CommunicationsGraphQLTest.java`.
