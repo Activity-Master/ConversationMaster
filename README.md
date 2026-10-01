@@ -1,17 +1,31 @@
 ﻿# Conversation Master
 
+Conversation Master is an independently discovered ActivityMaster plugin, never an
+IMasterSystem. Runtime calls require a verified organic user's credential, a
+current installation on the authorized party, individual dependency consent and
+administrator policy, in addition to the existing domain/row permissions. The
+identity's optional installationPartyId defaults to the verified party; hosts
+must verify membership before selecting an organization installation. Legacy
+System credentials are retired by forward updates while registration IDs and
+domain data are retained. Provisioning grants no user installation or consent.
+
+
 Conversation Master stores a conversation as a typed FSDM Arrangement. Its participants
 are InvolvedParty records linked through ArrangementXInvolvedParty. Each sent message
 is an Event linked to the Arrangement and its sender. The message body is a private
 ResourceItem linked to that Event. The module adds no table or parallel conversation
-store. Installation registers only the system, arrangement/event/resource types and
-relationship classifications.
+store. Enterprise provisioning registers the plugin, catalogue/dependency and
+arrangement/event/resource types and relationship classifications.
+`ConversationPluginInstall` (1174) provisions the plugin independently of the
+previously recorded domain update; `ConversationInstall` (1175) provisions taxonomy.
 
 The consuming host supplies a verified ConversationIdentity through a binding of
 ConversationIdentityProvider. The identity contains an involved party, enterprise,
-FSDM context and ActivityMaster identifying token. It must never come from browser
-request data. The service checks the actor's live party grant and membership on
-every read and send. The conversation context (realm:ownerId) is stored on the
+FSDM context, ActivityMaster identifying token and installation party. Its
+four-argument constructor defaults installation to the verified party. It must
+never come from browser request data. The service checks current plugin
+installation, dependency consent, administrator policy, the actor's live party
+grant and membership on every read, send and leave. The conversation context (realm:ownerId) is stored on the
 Arrangement. Personal and Social contexts are owned by the verified organic party;
 Work context is owned by the authorized enterprise. A Social conversation stores
 the creator as owner, while invited parties enter with their own verified Social

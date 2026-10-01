@@ -5,8 +5,12 @@ import java.util.Objects;
 import java.util.UUID;
 
 /** A host-resolved actor and FSDM context. This is never request body data. */
-public record ConversationIdentity(UUID partyId, UUID enterpriseId, ActivityScope.Context context, UUID identityToken) {
+public record ConversationIdentity(UUID partyId, UUID enterpriseId, ActivityScope.Context context, UUID identityToken, UUID installationPartyId) {
+    public ConversationIdentity(UUID partyId, UUID enterpriseId, ActivityScope.Context context, UUID identityToken) {
+        this(partyId, enterpriseId, context, identityToken, partyId);
+    }
     public ConversationIdentity {
+        Objects.requireNonNull(installationPartyId, "installationPartyId");
         Objects.requireNonNull(partyId, "partyId");
         Objects.requireNonNull(enterpriseId, "enterpriseId");
         Objects.requireNonNull(context, "context");
@@ -15,6 +19,9 @@ public record ConversationIdentity(UUID partyId, UUID enterpriseId, ActivityScop
             throw new SecurityException("Work conversations require the authorized enterprise context");
         if (context.realm() != ActivityScope.Realm.WORK && !partyId.equals(context.ownerId()))
             throw new SecurityException("Personal and social conversations require the verified party context");
+    }
+    public com.guicedee.activitymaster.fsdm.plugins.PluginModels.Identity user() {
+        return new com.guicedee.activitymaster.fsdm.plugins.PluginModels.Identity(partyId, enterpriseId, identityToken);
     }
     public UUID[] tokens() { return new UUID[]{identityToken}; }
 }

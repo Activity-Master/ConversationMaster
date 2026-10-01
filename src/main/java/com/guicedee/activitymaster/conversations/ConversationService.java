@@ -36,10 +36,12 @@ public final class ConversationService implements IConversationService {
     private Uni<Scope> actor(Mutiny.StatelessSession session, ISystems<?, ?> system, ConversationIdentity identity) {
         Scope scope = scope(system, identity);
         if (session == null) return Uni.createFrom().failure(new BadRequestException("Session required"));
-        return session.createNativeQuery("select 1 from security.securitytoken k where k.securitytoken=:token "
+        return com.guicedee.client.IGuiceContext.get(com.guicedee.activitymaster.fsdm.plugins.PluginService.class)
+                .checkBuiltIn(session, system, identity.user(), identity.installationPartyId())
+                .chain(() -> session.createNativeQuery("select 1 from security.securitytoken k where k.securitytoken=:token "
                         + "and " + live("k"), Integer.class)
                 .setParameter("token", identity.identityToken().toString())
-                .setParameter("enterprise", scope.enterprise()).getResultList()
+                .setParameter("enterprise", scope.enterprise()).getResultList())
                 .chain(identities -> {
                     if (identities.isEmpty()) return Uni.createFrom().failure(new SecurityException("Caller token unavailable"));
                     return session.createNativeQuery("select 1 from party.involvedparty p where p.involvedpartyid=:actor "

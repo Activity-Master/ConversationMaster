@@ -30,6 +30,30 @@ class ConversationStorageTest {
     private UUID recipientId;
     private UUID outsiderId;
     private UUID token;
+    @Test void pluginAdmissionCannotBeReplacedByConversationMembershipOrPluginCredential() {
+        assertFalse(com.guicedee.activitymaster.fsdm.client.services.systems.IMasterSystem.class
+                .isAssignableFrom(ConversationSystem.class));
+        var user = run(c -> PluginTestFixture.user(c.getItem1(), c.getItem2()));
+        var identity = new ConversationIdentity(user.partyId(), user.enterpriseId(),
+                new ActivityScope.Context(ActivityScope.Realm.PERSONAL, user.partyId()), user.identityToken());
+        assertThrows(SecurityException.class, () -> run(c -> service.list(c.getItem1(), c.getItem3(), identity, 0, 10)));
+        run(c -> PluginTestFixture.enable(c.getItem1(), c.getItem3(), user));
+        Conversation conversation = run(c -> service.create(c.getItem1(), c.getItem3(), identity,
+                new Create(ActivityScope.Realm.PERSONAL, user.partyId(), List.of())));
+        run(c -> service.send(c.getItem1(), c.getItem3(), identity, conversation.id(), new Send("Retained content")));
+        var forged = new ConversationIdentity(user.partyId(), user.enterpriseId(), identity.context(),
+                run(c -> Uni.createFrom().item(c.getItem4()[0])));
+        assertThrows(SecurityException.class, () -> run(c -> service.messages(c.getItem1(), c.getItem3(), forged, conversation.id(), 0, 10)));
+        run(c -> IGuiceContext.get(com.guicedee.activitymaster.fsdm.plugins.PluginService.class)
+                .remove(c.getItem1(), c.getItem3(), user, c.getItem3().getId(), user.partyId()));
+        assertThrows(SecurityException.class, () -> run(c -> service.messages(c.getItem1(), c.getItem3(), identity, conversation.id(), 0, 10)));
+        run(c -> IGuiceContext.get(com.guicedee.activitymaster.fsdm.plugins.PluginService.class)
+                .install(c.getItem1(), c.getItem3(), user, c.getItem3().getId(), user.partyId()));
+        assertThrows(SecurityException.class, () -> run(c -> service.find(c.getItem1(), c.getItem3(), identity, conversation.id())));
+        run(c -> PluginTestFixture.enable(c.getItem1(), c.getItem3(), user));
+        assertEquals("Retained content", run(c -> service.messages(c.getItem1(), c.getItem3(), identity, conversation.id(), 0, 10)).items().getFirst().text());
+    }
+    private final java.util.Map<UUID, UUID> tokens = new java.util.HashMap<>();
 
     @BeforeAll void setup() {
         var database = PostgreSQLTestDBModule.DATABASE;
@@ -51,17 +75,16 @@ class ConversationStorageTest {
                 .chain(e -> enterprises.loadUpdates(session, e))).await().atMost(Duration.ofMinutes(5));
         run(c -> {
             enterpriseId = c.getItem2().getId();
-            token = c.getItem4()[0];
-            IInvolvedPartyService<?> parties = IGuiceContext.get(IInvolvedPartyService.class);
-            return parties.createIdentificationType(c.getItem1(), c.getItem3(), "ConversationTestId", "Test party", token)
-                    .chain(() -> parties.create(c.getItem1(), c.getItem3(), new Pair<>("ConversationTestId", UUID.randomUUID().toString()), true, token))
-                    .chain(actor -> {
-                        actorId = actor.getId();
-                        return parties.create(c.getItem1(), c.getItem3(), new Pair<>("ConversationTestId", UUID.randomUUID().toString()), true, token);
-                    }).chain(recipient -> {
-                        recipientId = recipient.getId();
-                        return parties.create(c.getItem1(), c.getItem3(), new Pair<>("ConversationTestId", UUID.randomUUID().toString()), true, token);
-                    }).invoke(outsider -> outsiderId = outsider.getId()).replaceWithVoid();
+            return PluginTestFixture.user(c.getItem1(), c.getItem2()).chain(actor -> {
+                actorId = actor.partyId(); token = actor.identityToken(); tokens.put(actor.partyId(), actor.identityToken());
+                return PluginTestFixture.enable(c.getItem1(), c.getItem3(), actor);
+            }).chain(() -> PluginTestFixture.user(c.getItem1(), c.getItem2())).chain(recipient -> {
+                recipientId = recipient.partyId(); tokens.put(recipient.partyId(), recipient.identityToken());
+                return PluginTestFixture.enable(c.getItem1(), c.getItem3(), recipient);
+            }).chain(() -> PluginTestFixture.user(c.getItem1(), c.getItem2())).chain(outsider -> {
+                outsiderId = outsider.partyId(); tokens.put(outsider.partyId(), outsider.identityToken());
+                return PluginTestFixture.enable(c.getItem1(), c.getItem3(), outsider);
+            });
         });
     }
 
@@ -74,12 +97,12 @@ class ConversationStorageTest {
 
     private ConversationIdentity identity(UUID party) {
         return new ConversationIdentity(party, enterpriseId,
-                new ActivityScope.Context(ActivityScope.Realm.WORK, enterpriseId), token);
+                new ActivityScope.Context(ActivityScope.Realm.WORK, enterpriseId), tokens.get(party));
     }
 
     private ConversationIdentity social(UUID party) {
         return new ConversationIdentity(party, enterpriseId,
-                new ActivityScope.Context(ActivityScope.Realm.SOCIAL, party), token);
+                new ActivityScope.Context(ActivityScope.Realm.SOCIAL, party), tokens.get(party));
     }
 
     @Test void storesFsdmConversationAndRestrictsMessagesToMembers() {

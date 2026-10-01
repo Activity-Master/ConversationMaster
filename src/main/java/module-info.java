@@ -12,6 +12,7 @@ module com.guicedee.activitymaster.conversations {
     opens com.guicedee.activitymaster.conversations.rest to com.google.guice, com.guicedee.rest, tools.jackson.databind;
     provides com.guicedee.client.services.lifecycle.IGuiceModule with com.guicedee.activitymaster.conversations.ConversationModule;
     provides com.guicedee.client.services.config.IGuiceScanModuleInclusions with com.guicedee.activitymaster.conversations.ConversationInclusionModule;
-    provides com.guicedee.activitymaster.fsdm.client.services.systems.IMasterSystem with com.guicedee.activitymaster.conversations.ConversationSystem;
-    provides com.guicedee.activitymaster.fsdm.client.services.systems.ISystemUpdate with com.guicedee.activitymaster.conversations.ConversationInstall;
+    provides com.guicedee.activitymaster.fsdm.client.services.systems.IMasterPlugin with com.guicedee.activitymaster.conversations.ConversationSystem;
+    provides com.guicedee.activitymaster.fsdm.client.services.systems.ISystemUpdate with com.guicedee.activitymaster.conversations.ConversationPluginInstall,
+            com.guicedee.activitymaster.conversations.ConversationInstall;
 }

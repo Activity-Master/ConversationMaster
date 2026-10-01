@@ -16,9 +16,14 @@ import static com.guicedee.activitymaster.fsdm.client.services.IActivityMasterSe
 @SortedUpdate(sortOrder = 1175, taskCount = 1)
 public final class ConversationInstall implements ISystemUpdate {
     @Override public Uni<Boolean> update(Mutiny.StatelessSession session, IEnterprise<?, ?> enterprise) {
-        return getISystem(session, ConversationSystem.NAME, enterprise)
-                .chain(system -> getISystemToken(session, ConversationSystem.NAME, enterprise)
-                        .chain(token -> install(session, system, token).replaceWith(true)));
+        ISystemsService<?> systems = IGuiceContext.get(ISystemsService.class);
+        var extension = IGuiceContext.get(ConversationSystem.class);
+        return systems.getActivityMaster(session, enterprise)
+                .chain(core -> systems.getSecurityIdentityToken(session, core)
+                        .chain(bootstrapToken -> IGuiceContext.get(com.guicedee.activitymaster.fsdm.plugins.PluginService.class)
+                                .registerBuiltIn(session, core, bootstrapToken, extension)
+                                .chain(() -> extension.getSystem(session, enterprise))
+                                .chain(system -> install(session, system, bootstrapToken).replaceWith(true))));
     }
 
     private Uni<Void> install(Mutiny.StatelessSession session, ISystems<?, ?> system, UUID token) {
